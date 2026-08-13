@@ -64,6 +64,12 @@
         minZoom: mapMinZoom,
         maxZoom: mapMaxZoom,
 
+        /*
+          Обычное колесо прокручивает страницу Tilda под картой.
+          Масштаб карты остаётся доступен через + / − и двойной клик.
+        */
+        scrollWheelZoom: false,
+
         /* Разрешаем точный дробный масштаб вместо грубых целых ступеней. */
         zoomSnap: 0,
         zoomDelta: 0.5,
@@ -114,6 +120,50 @@
         window.clearTimeout(resizeTimer);
         resizeTimer = window.setTimeout(fillViewportWithMap, 80);
       });
+
+      /*
+        Событие колеса не может само перейти из iframe в родительскую страницу,
+        поэтому передаём только величину прокрутки через postMessage.
+      */
+      document.addEventListener(
+        "wheel",
+        function (event) {
+          event.preventDefault();
+
+          /* Ctrl/Cmd + колесо масштабирует карту вокруг курсора. */
+          if (event.ctrlKey || event.metaKey) {
+            var rect = map.getContainer().getBoundingClientRect();
+            var point = L.point(
+              event.clientX - rect.left,
+              event.clientY - rect.top
+            );
+            var modeMultiplier = 1;
+            if (event.deltaMode === 1) modeMultiplier = 16;
+            if (event.deltaMode === 2) modeMultiplier = window.innerHeight;
+
+            var targetZoom =
+              map.getZoom() - event.deltaY * modeMultiplier * 0.0025;
+            targetZoom = Math.max(
+              map.getMinZoom(),
+              Math.min(map.getMaxZoom(), targetZoom)
+            );
+
+            map.setZoomAround(point, targetZoom, { animate: false });
+            return;
+          }
+
+          window.parent.postMessage(
+            {
+              type: "kv-map-wheel-scroll",
+              deltaX: event.deltaX,
+              deltaY: event.deltaY,
+              deltaMode: event.deltaMode
+            },
+            "*"
+          );
+        },
+        { passive: false }
+      );
     </script>
   </body>
 </html>
